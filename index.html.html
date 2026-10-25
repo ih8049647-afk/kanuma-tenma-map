@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>鹿沼市 クマ・イノシシ出没マップ</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#f3f1ec;--ink:#22261f;--sub:#5d6357;--line:#d6d2c6;--bear:#b3261e;--boar:#0f6b78;--ok:#2f5d3a}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1f1a;--ink:#ecebe4;--sub:#a4a99a;--line:#363a31;--bear:#ef6a5e;--boar:#4fc3d4;--ok:#7bb98a}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:"Hiragino Sans","Noto Sans JP",Meiryo,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}
+header{padding:10px 16px;border-bottom:1px solid var(--line)}
+h1{font-size:1.1rem;margin:0}
+header p{margin:2px 0 0;color:var(--sub);font-size:.78rem}
+main{flex:1;display:flex;min-height:0}
+#map{flex:1;min-width:0}
+aside{width:330px;border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.filters{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px;font-size:.85rem}
+.filters label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+select{font:inherit;padding:4px 6px;background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:6px}
+input:focus-visible,select:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
+.sw{width:12px;height:12px;display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px currentColor}
+.sw.bear{background:var(--bear);color:var(--bear);border-radius:50%}
+.sw.boar{background:var(--boar);color:var(--boar);transform:rotate(45deg) scale(.85)}
+#status{font-size:.78rem;color:var(--sub)}
+#list{flex:1;overflow:auto;margin:0;padding:0;list-style:none}
+#list li{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;gap:10px;align-items:center}
+#list li:hover{background:rgba(127,127,127,.1)}
+#list .n{min-width:26px;height:26px;border-radius:50%;color:#fff;font-size:.8rem;font-weight:700;display:flex;align-items:center;justify-content:center}
+#list .n.boar{border-radius:4px}
+#list b{display:block;font-size:.9rem}
+#list span{font-size:.78rem;color:var(--sub)}
+.note{padding:8px 12px;font-size:.72rem;color:var(--sub);border-top:1px solid var(--line);line-height:1.55}
+.note a{color:inherit}
+.mk{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+.mk.bear{background:var(--bear);border-radius:50%}
+.mk.boar{background:var(--boar);border-radius:4px;transform:rotate(45deg)}
+.mk.boar span{transform:rotate(-45deg)}
+.mk.recent{box-shadow:0 0 0 3px #111,0 0 0 5px #fff}
+.pop{color:#22261f;max-width:240px}
+.pop ul{margin:6px 0 0;padding-left:18px;font-size:.85rem;line-height:1.5}
+.pop small{color:#555}
+.add{display:none;border-bottom:1px solid var(--line);font-size:.85rem}
+.add.show{display:block}
+.add summary{padding:9px 12px;cursor:pointer;font-weight:700}
+.addbox{padding:0 12px 10px;display:flex;flex-direction:column;gap:7px}
+.addbox textarea,.addbox input[type=text],.addbox input[type=date]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--ink);width:100%}
+.addbox .row{gap:6px}
+.addbox .row>*{width:auto}
+.addbox small{color:var(--sub);line-height:1.5}
+button.primary{background:var(--ok);border-color:var(--ok);color:#fff}
+button{font:inherit;font-size:.82rem;padding:6px 10px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:6px;cursor:pointer}
+.search{position:relative}
+.search input[type=search]{width:100%;font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--ink)}
+#sug{position:absolute;left:0;right:0;top:100%;z-index:1000;margin:2px 0 0;padding:0;list-style:none;background:var(--bg);border:1px solid var(--line);border-radius:6px;max-height:240px;overflow:auto;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+#sug li{padding:7px 10px;cursor:pointer;font-size:.85rem}
+#sug li:hover,#sug li.on{background:rgba(127,127,127,.18)}
+#sug:empty{display:none}
+.lbl{pointer-events:none}
+.lbl span{position:absolute;transform:translate(-50%,18px);white-space:nowrap;font-size:12px;font-weight:700;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000,0 0 2px #000}
+.lbl.dark span{color:#22261f;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 2px #fff}
+@media(max-width:720px){main{flex-direction:column}aside{width:100%;height:42%;border-left:0;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>鹿沼市 クマ・イノシシ出没マップ</h1>
+  <p>鹿沼市の公表情報(2026年10月25日時点)をもとに、過去の出没場所を表示します</p>
+</header>
+<main>
+  <div id="map" aria-label="鹿沼市の出没マップ"></div>
+  <aside>
+    <div class="filters">
+      <div class="search">
+        <input type="search" id="q" placeholder="地域を検索(例:草久、上粕尾、久野)" autocomplete="off" aria-label="地域を検索">
+        <ul id="sug"></ul>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="f-bear" checked><i class="sw bear"></i>クマ <span id="c-bear"></span></label>
+        <label><input type="checkbox" id="f-boar" checked><i class="sw boar"></i>イノシシ <span id="c-boar"></span></label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="f-lbl" checked>町名を表示</label>
+      </div>
+      <div class="row">
+        <label>期間
+          <select id="f-days">
+            <option value="0">すべて</option>
+            <option value="7">直近7日</option>
+            <option value="30">直近30日</option>
+            <option value="90">直近90日</option>
+          </select>
+        </label>
+      </div>
+      <div id="status">位置を取得しています…</div>
+    </div>
+    <details class="add">
+      <summary>正確な位置を追加</summary>
+      <div class="addbox">
+        <div class="row">
+          <select id="a-animal"><option value="bear">クマ</option><option value="boar">イノシシ</option></select>
+          <input type="date" id="a-date">
+        </div>
+        <textarea id="a-url" rows="2" placeholder="Googleマップのリンク、または座標(例:36.5227, 139.6706)"></textarea>
+        <input type="text" id="a-note" placeholder="補足(例:○○橋付近)">
+        <label><input type="checkbox" id="a-rep" checked>同じ日・同じ町の市の記録の位置を置き換える</label>
+        <div class="row"><button id="a-add" class="primary">追加</button><button id="a-copy">追加分をコピー</button><button id="a-clear">追加分を消す</button></div>
+        <small id="a-msg">短縮URL(maps.app.goo.gl)は、ブラウザで開いたあとのアドレス欄のURLを貼ってください。</small>
+      </div>
+    </details>
+    <ul id="list"></ul>
+    <div class="note">
+      印は<b>町名の中心付近の目安</b>で、実際の目撃地点ではありません(円の数字は件数、黒い縁は7日以内)。正確な場所は市の「位置図」でご確認ください。<br>
+      出典:<a href="https://www.city.kanuma.tochigi.jp/0537/info-0000011228-0.html" target="_blank" rel="noopener">クマの目撃情報(令和8年度)</a>、<a href="https://www.city.kanuma.tochigi.jp/viewer/urgent.html?idSubTop=0" target="_blank" rel="noopener">緊急情報</a>。イノシシは緊急情報に出た分のみです。緊急時は110番へ。
+    </div>
+  </aside>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// 形式: 動物|月/日|地名|補足|緯度,経度(省略可)
+// 新しい情報は、この一覧の末尾に1行ずつ足せば地図に反映されます。
+const DATA = `
+bear|4/16|草久
+bear|4/21|武子工業団地～御成橋周辺
+bear|5/4|草久
+bear|5/8|上南摩町
+bear|5/9|上粕尾
+bear|5/9|下久我
+bear|5/11|下粕尾
+bear|5/13|上南摩町
+bear|5/20|上南摩
+bear|5/23|上永野
+bear|6/8|中粟野
+bear|6/8|玉田町
+bear|6/9|深程
+bear|6/11|北半田
+bear|6/11|上石川
+bear|6/12|草久
+bear|6/14|油田町
+bear|6/14|亀和田町
+bear|6/26|上粕尾
+bear|6/27|上石川
+bear|6/30|北半田
+bear|6/30|上粕尾
+bear|7/6|西沢町
+bear|7/6|草久
+bear|7/9|中粟野
+bear|7/10|草久
+bear|7/11|口粟野
+bear|7/11|草久
+bear|7/14|上南摩町
+bear|7/14|笹原田
+bear|7/14|入粟野
+bear|7/15|上粕尾
+bear|7/17|上南摩町
+bear|7/20|西沢町
+bear|7/25|旭が丘
+bear|7/26|入粟野
+bear|7/26|上南摩町
+bear|7/27|上南摩町
+bear|7/28|西沢町
+bear|8/9|三幸町
+bear|8/9|上粕尾
+bear|8/11|口粟野
+bear|8/13|西沢町
+bear|8/20|草久
+bear|8/23|下粕尾
+bear|9/14|久野
+bear|9/22|板荷
+bear|9/23|板荷
+bear|10/1|久野
+bear|10/2|北半田
+bear|10/2|口粟野
+bear|10/7|口粟野|横町橋付近・親子グマ
+bear|10/8|口粟野|アメニティホーム付近(15:30頃)|36.52275,139.67067
+bear|10/8|口粟野|天満橋付近・子グマ(17:10頃)
+bear|10/9|久野
+bear|10/10|下永野
+bear|10/10|坂田山
+bear|10/11|上南摩町
+bear|10/12|口粟野
+bear|10/13|久野
+bear|10/14|久野
+bear|10/14|久野
+bear|10/16|加園
+bear|10/18|下日向
+bear|10/22|加園|上見立橋から300m上流・子グマ1頭
+bear|10/23|上永野|大鹿沢下流120m・同日わなで捕獲
+boar|10/16|上野町|市営上野町墓地付近(18:40頃)
+boar|10/25|口粟野|エネオス南側畑地(16:30頃)
+`;
+const QUERY = { "武子工業団地～御成橋周辺": "武子" };
+const NAME = { bear: "クマ", boar: "イノシシ" };
+const PAGE = {
+  bear: "https://www.city.kanuma.tochigi.jp/0537/info-0000011228-0.html",
+  boar: "https://www.city.kanuma.tochigi.jp/viewer/urgent.html?idSubTop=0"
+};
+const YEAR = 2026;
+const today = new Date(); today.setHours(0, 0, 0, 0);
+
+// PARSE-START
+function parseCoord(t) {
+  t = (t || "").trim();
+  let m = t.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) ||
+          t.match(/[?&](?:q|ll|query)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/) || t.match(/^(-?\d{1,2}\.\d+)\s*[,、\s]\s*(-?\d{2,3}\.\d+)$/);
+  if (m) return [Number(m[1]), Number(m[2])];
+  m = t.match(/(\d+)°\s*(\d+)['′]\s*([\d.]+)["″]?\s*N[\s,]*(\d+)°\s*(\d+)['′]\s*([\d.]+)["″]?\s*E/i);
+  if (m) return [+m[1] + m[2] / 60 + m[3] / 3600, +m[4] + m[5] / 60 + m[6] / 3600];
+  return null;
+}
+// PARSE-END
+const US_KEY = "kanuma-user-v1", FX_KEY = "kanuma-fix-v1";
+let userAdds = [], fixes = {};
+try { userAdds = JSON.parse(localStorage.getItem(US_KEY) || "[]"); } catch (e) { userAdds = []; }
+try { fixes = JSON.parse(localStorage.getItem(FX_KEY) || "{}"); } catch (e) { fixes = {}; }
+const saveLocal = () => { try { localStorage.setItem(US_KEY, JSON.stringify(userAdds)); localStorage.setItem(FX_KEY, JSON.stringify(fixes)); } catch (e) {} };
+
+function buildEntries() {
+  const list = DATA.trim().split("\n").map((l, i) => {
+    const [animal, md, place, note, xy] = l.split("|");
+    const [m, d] = md.split("/").map(Number);
+    const c = xy ? xy.split(",").map(Number) : null;
+    return { i, animal, place, note: note || "", coord: c, date: new Date(YEAR, m - 1, d), md };
+  });
+  Object.keys(fixes).forEach(k => { const e = list[k]; if (e) { e.coord = fixes[k].c; e.note = fixes[k].note || e.note; e.fixed = true; } });
+  userAdds.forEach(u => {
+    const dt = new Date(u.date + "T00:00:00");
+    list.push({ i: -1, animal: u.animal, place: u.place, note: u.note, coord: u.c, date: dt, md: (dt.getMonth() + 1) + "/" + dt.getDate(), user: true });
+  });
+  return list;
+}
+let entries = buildEntries();
+
+const map = L.map("map").setView([36.62, 139.68], 11);
+const attr = '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>';
+const photo = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg", { maxZoom: 18, attribution: attr });
+const std = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png", { maxZoom: 18, attribution: attr });
+photo.addTo(map);
+L.control.layers({ "航空写真": photo, "地図": std }, null, { position: "topright" }).addTo(map);
+const layer = L.layerGroup().addTo(map);
+
+let geo = {};
+try { geo = JSON.parse(localStorage.getItem("kanuma-geo-v1") || "{}"); } catch (e) { geo = {}; }
+const saveGeo = () => { try { localStorage.setItem("kanuma-geo-v1", JSON.stringify(geo)); } catch (e) {} };
+
+async function locate(place) {
+  if (geo[place]) return geo[place];
+  try {
+    const q = "栃木県鹿沼市" + (QUERY[place] || place);
+    const r = await fetch("https://msearch.gsi.go.jp/address-search/AddressSearch?q=" + encodeURIComponent(q));
+    const j = await r.json();
+    const hit = j.find(f => (f.properties.title || "").startsWith("栃木県鹿沼市"));
+    if (hit) { geo[place] = [hit.geometry.coordinates[1], hit.geometry.coordinates[0]]; saveGeo(); return geo[place]; }
+  } catch (e) {}
+  return null;
+}
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = d => (d.getMonth() + 1) + "/" + d.getDate();
+const dayDiff = d => Math.round((today - d) / 86400000);
+
+function render() {
+  layer.clearLayers();
+  const on = { bear: document.getElementById("f-bear").checked, boar: document.getElementById("f-boar").checked };
+  const days = Number(document.getElementById("f-days").value);
+  const rows = entries.filter(e => on[e.animal] && (!days || dayDiff(e.date) <= days));
+
+  const groups = {};
+  rows.forEach(e => {
+    const key = e.animal + "|" + (e.coord ? e.place + "@" + e.note : e.place);
+    (groups[key] = groups[key] || { animal: e.animal, place: e.place, coord: e.coord, items: [] }).items.push(e);
+  });
+
+  const list = [];
+  const missing = new Set();
+  Object.values(groups).forEach(g => {
+    g.items.sort((a, b) => b.date - a.date);
+    g.latest = g.items[0].date;
+    let pos = g.coord || geo[g.place];
+    if (!pos) { missing.add(g.place); return; }
+    if (g.animal === "boar" && !g.coord) pos = [pos[0], pos[1] + 0.003];
+    const n = g.items.length;
+    const size = 22 + 4 * Math.min(n, 8);
+    const recent = dayDiff(g.latest) <= 7;
+    const icon = L.divIcon({
+      className: "",
+      html: `<div class="mk ${g.animal}${recent ? " recent" : ""}" style="width:${size}px;height:${size}px"><span>${n}</span></div>`,
+      iconSize: [size, size], iconAnchor: [size / 2, size / 2]
+    });
+    const lis = g.items.map(i => `<li>${fmt(i.date)}${i.note ? "　" + esc(i.note) : ""}</li>`).join("");
+    const html = `<div class="pop"><b>${esc(g.place)}</b>(${NAME[g.animal]} ${n}件)<ul>${lis}</ul>
+      <small>町名の中心付近の目安です。<a href="${PAGE[g.animal]}" target="_blank" rel="noopener">市の公表ページ</a></small></div>`;
+    const m = L.marker(pos, { icon }).addTo(layer).bindPopup(html);
+    list.push({ g, m, pos, n });
+  });
+
+  list.sort((a, b) => b.g.latest - a.g.latest);
+  const ul = document.getElementById("list");
+  ul.innerHTML = list.length ? "" : '<li style="cursor:default;color:var(--sub)">条件に合う記録がありません。</li>';
+  list.forEach(({ g, m, pos, n }) => {
+    const li = document.createElement("li");
+    const bg = g.animal === "bear" ? "var(--bear)" : "var(--boar)";
+    li.innerHTML = `<div class="n ${g.animal}" style="background:${bg}">${n}</div><div><b>${esc(g.place)}</b><span>${NAME[g.animal]}・最新 ${fmt(g.latest)}${g.coord ? "・" + esc(g.items[0].note) : ""}</span></div>`;
+    li.onclick = () => { map.setView(pos, 14); m.openPopup(); };
+    ul.appendChild(li);
+  });
+
+  const cnt = a => entries.filter(e => e.animal === a).length;
+  document.getElementById("c-bear").textContent = cnt("bear") + "件";
+  document.getElementById("c-boar").textContent = cnt("boar") + "件";
+  document.getElementById("status").textContent =
+    `表示中:${rows.length}件(${list.length}か所)` + (missing.size ? `。位置を取得できなかった地名:${[...missing].join("、")}` : "");
+}
+
+["f-bear", "f-boar", "f-days"].forEach(id => document.getElementById(id).addEventListener("change", render));
+
+
+// ---- 町名ラベル ----
+const labelLayer = L.layerGroup().addTo(map);
+const searchLayer = L.layerGroup().addTo(map);
+function drawLabels() {
+  labelLayer.clearLayers();
+  if (!document.getElementById("f-lbl").checked) return;
+  const dark = map.hasLayer(std);
+  Object.keys(geo).forEach(name => {
+    if (!entries.some(e => e.place === name)) return;
+    L.marker(geo[name], {
+      interactive: false, keyboard: false,
+      icon: L.divIcon({ className: "lbl" + (dark ? " dark" : ""), html: "<span>" + esc(name.replace(/～.*$/, "")) + "</span>", iconSize: [0, 0] })
+    }).addTo(labelLayer);
+  });
+}
+document.getElementById("f-lbl").addEventListener("change", drawLabels);
+map.on("baselayerchange", () => setTimeout(drawLabels, 0));
+
+// ---- 地域検索 ----
+const qEl = document.getElementById("q"), sug = document.getElementById("sug");
+let sugItems = [], timer = 0, seq = 0;
+const shortName = t => t.replace(/^栃木県鹿沼市/, "");
+
+function goTo(pos, title) {
+  const name = shortName(title);
+  searchLayer.clearLayers();
+  L.marker(pos, { interactive: false, icon: L.divIcon({ className: "lbl", html: "<span>" + esc(name) + "</span>", iconSize: [0, 0] }) }).addTo(searchLayer);
+  map.flyTo(pos, 15, { duration: 1.2 });
+  const b = entries.filter(e => e.animal === "bear" && (name === e.place || name.startsWith(e.place))).length;
+  const o = entries.filter(e => e.animal === "boar" && (name === e.place || name.startsWith(e.place))).length;
+  document.getElementById("status").textContent = `${name}:クマ ${b}件、イノシシ ${o}件(市の公表分)`;
+  sug.innerHTML = ""; sugItems = [];
+}
+
+function showSug(items) {
+  sugItems = items;
+  sug.innerHTML = "";
+  items.forEach((it, i) => {
+    const li = document.createElement("li");
+    li.textContent = it.title;
+    li.onclick = () => { qEl.value = shortName(it.title); goTo(it.pos, it.title); };
+    sug.appendChild(li);
+  });
+}
+
+async function search(q) {
+  const my = ++seq;
+  const out = [], seen = new Set();
+  Object.keys(geo).forEach(n => { if (n.includes(q) && !seen.has(n)) { seen.add(n); out.push({ title: "栃木県鹿沼市" + n.replace(/～.*$/, ""), pos: geo[n] }); } });
+  try {
+    const r = await fetch("https://msearch.gsi.go.jp/address-search/AddressSearch?q=" + encodeURIComponent("栃木県鹿沼市" + q));
+    const j = await r.json();
+    j.forEach(f => {
+      const t = f.properties.title || "";
+      if (t.startsWith("栃木県鹿沼市") && !seen.has(t) && !seen.has(shortName(t))) {
+        seen.add(t); out.push({ title: t, pos: [f.geometry.coordinates[1], f.geometry.coordinates[0]] });
+      }
+    });
+  } catch (e) {}
+  if (my === seq) showSug(out.slice(0, 8));
+  return out;
+}
+
+qEl.addEventListener("input", () => {
+  clearTimeout(timer);
+  const q = qEl.value.trim();
+  if (!q) { sug.innerHTML = ""; sugItems = []; return; }
+  timer = setTimeout(() => search(q), 250);
+});
+qEl.addEventListener("keydown", async e => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const q = qEl.value.trim();
+  if (!q) return;
+  const items = sugItems.length ? sugItems : await search(q);
+  if (items.length) goTo(items[0].pos, items[0].title);
+  else document.getElementById("status").textContent = "「" + q + "」は鹿沼市内で見つかりませんでした。";
+});
+document.addEventListener("click", e => { if (!e.target.closest(".search")) sug.innerHTML = ""; });
+
+// ---- 正確な位置の追加 ----
+(function () {
+  const $ = id => document.getElementById(id);
+  const showAdmin = () => document.querySelector(".add").classList.toggle("show", location.hash === "#admin");
+  showAdmin(); window.addEventListener("hashchange", showAdmin);
+  const t = new Date(); t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+  $("a-date").value = t.toISOString().slice(0, 10);
+  const msg = x => { $("a-msg").textContent = x; };
+  async function townAt(lat, lng) {
+    try {
+      const r = await fetch("https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lon=" + lng + "&lat=" + lat);
+      const j = await r.json();
+      return (j.results && j.results.lv01Nm) || "";
+    } catch (e) { return ""; }
+  }
+  $("a-add").onclick = async () => {
+    const raw = $("a-url").value.trim();
+    const c = parseCoord(decodeURIComponent(raw.replace(/%(?![0-9A-Fa-f]{2})/g, "%25")));
+    if (!c) {
+      msg(/goo\.gl|maps\.app/.test(raw)
+        ? "短縮URLは、ここからは中身を読み取れません。ブラウザで開き、アドレス欄に出る長いURLを貼ってください。"
+        : "座標を読み取れませんでした。Googleマップのリンクか、「36.52, 139.67」の形で入力してください。");
+      return;
+    }
+    if (c[0] < 36.3 || c[0] > 36.85 || c[1] < 139.4 || c[1] > 139.95) { msg("鹿沼市の範囲から外れています。リンクを確認してください。"); return; }
+    msg("町名を調べています…");
+    const place = (await townAt(c[0], c[1])) || "位置指定";
+    const animal = $("a-animal").value, date = $("a-date").value, note = $("a-note").value.trim();
+    const dt = new Date(date + "T00:00:00");
+    let replaced = false;
+    if ($("a-rep").checked) {
+      const hit = entries.find(e => !e.user && !e.fixed && !e.coord && e.animal === animal && e.date.getTime() === dt.getTime() && e.place === place);
+      if (hit) { fixes[hit.i] = { c, note }; replaced = true; }
+    }
+    if (!replaced) userAdds.push({ animal, date, place, note, c });
+    saveLocal();
+    entries = buildEntries();
+    render();
+    map.flyTo(c, 16, { duration: 1 });
+    msg(replaced ? "市の記録(" + place + ")の位置を、正確な位置に置き換えました。" : "新しい記録として追加しました(" + place + ")。");
+    $("a-url").value = ""; $("a-note").value = "";
+  };
+  $("a-copy").onclick = async () => {
+    const lines = [];
+    Object.keys(fixes).forEach(k => { const e = entries.find(x => x.i === Number(k)); if (e) lines.push(`置き換え→ ${e.animal}|${e.md}|${e.place}|${e.note}|${e.coord[0].toFixed(5)},${e.coord[1].toFixed(5)}`); });
+    userAdds.forEach(u => { const d = new Date(u.date + "T00:00:00"); lines.push(`${u.animal}|${d.getMonth() + 1}/${d.getDate()}|${u.place}|${u.note}|${u.c[0].toFixed(5)},${u.c[1].toFixed(5)}`); });
+    if (!lines.length) { msg("追加分はありません。"); return; }
+    const text = lines.join("\n");
+    try { await navigator.clipboard.writeText(text); msg(lines.length + "件をコピーしました。"); }
+    catch (e) { prompt("次の内容をコピーしてください", text); }
+  };
+  $("a-clear").onclick = () => {
+    if (!confirm("このブラウザに保存した追加分を、すべて消しますか?")) return;
+    userAdds = []; fixes = {}; saveLocal(); entries = buildEntries(); render(); drawLabels(); msg("追加分を消しました。");
+  };
+})();
+
+(async () => {
+  const places = [...new Set(entries.filter(e => !e.coord).map(e => e.place))];
+  await Promise.all(places.map(locate));
+  render();
+  drawLabels();
+})();
+</script>
+</body>
+</html>
